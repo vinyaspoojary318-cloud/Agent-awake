@@ -1,38 +1,18 @@
 # Agent-awake
 
 **Keep your AI agents running even when you close the laptop lid.**  
-Remote control via Telegram bot + **multi-agent prioritization**.
+Telegram remote control • Multi-agent prioritization • Lid-close override • Configurable safety
 
-Built with **Rust**.
+## Features (v0.2)
 
-## Features
-
-- ✅ Keep Windows awake while AI agents are working
-- ✅ Works with laptop lid closed
+- ✅ Keep Windows awake while AI agents work
+- ✅ **Lid-close → Do nothing** (automatic while agents run)
 - ✅ Telegram bot remote control
-- ✅ Real battery percentage + low battery cutoff (15%)
-- ✅ **Multi-agent prioritization** (Critical / High / Normal / Low)
-- ✅ Auto keep-awake based on highest priority agent
-- ✅ Supports **Claude Code, Codex, Antigravity, Cursor**, Ollama, and many more
-
-### Priority System
-
-| Priority   | Agents                                      | Behavior                                      |
-|------------|---------------------------------------------|-----------------------------------------------|
-| 🔴 Critical| (reserved for future manual override)       | Always keep awake                             |
-| 🟠 High    | Claude Code, Codex, Antigravity, Cursor     | Strongly preferred, keep awake                |
-| 🟢 Normal  | Ollama, Aider, Hermes, Goose, Cline, etc.   | Keep awake                                    |
-| ⚪ Low     | Open WebUI, ComfyUI, SillyTavern, etc.      | Keep awake only if battery > 30%              |
-
-## Telegram Commands
-
-| Command     | Description                                      |
-|-------------|--------------------------------------------------|
-| `/status`   | Status + list of agents with their priorities    |
-| `/awake`    | Force keep system awake                          |
-| `/sleep`    | Allow normal sleep again                         |
-| `/battery`  | Battery information                              |
-| `/help`     | Show help                                        |
+- ✅ **Configurable battery cutoff** (default 15%)
+- ✅ Multi-agent prioritization (High / Normal / Low)
+- ✅ Claude Code + Codex + Antigravity detection
+- ✅ Hook support (snippets generated for Claude Code & Codex)
+- ⏳ System tray icon (foundation added, polish coming)
 
 ## Quick Start
 
@@ -40,39 +20,57 @@ Built with **Rust**.
 git clone https://github.com/vinyaspoojary318-cloud/Agent-awake.git
 cd Agent-awake
 cp .env.example .env
-# Put your Telegram bot token in .env
+# Add your TELOXIDE_TOKEN
 cargo run
 ```
 
-Build release:
-```bash
-cargo build --release
+## Configuration
+
+A `config.toml` is created automatically (usually under `%APPDATA%\agent-awake\config.toml`).
+
+```toml
+battery_cutoff = 15
+low_priority_min_battery = 30
+override_lid_close = true
+restore_lid_on_exit = true
+monitor_interval_secs = 20
 ```
 
-## Supported Agents (detected)
+You can also set `BATTERY_CUTOFF` and `LOW_PRIORITY_MIN_BATTERY` in `.env`.
 
-**High Priority:** Claude Code, Codex, Antigravity (`antigravity` / `agy`), Cursor  
-**Normal:** Ollama, LM Studio, Aider, Continue, Hermes, OpenCode, Goose, Cline, vLLM, llama.cpp  
-**Low:** Open WebUI, ComfyUI, text-generation-webui, SillyTavern, etc.
+## Telegram Commands
 
-## How prioritization works
+| Command    | Description                        |
+|------------|------------------------------------|
+| `/status`  | Full status + priorities + lid     |
+| `/awake`   | Force keep awake + lid override    |
+| `/sleep`   | Restore normal sleep + lid         |
+| `/battery` | Battery details                    |
+| `/lid`     | Lid-close override status          |
+| `/config`  | Show current configuration         |
+| `/help`    | Help                               |
 
-- Background monitor checks every 20 seconds
-- Highest priority running agent decides whether to keep the system awake
-- Low priority agents only keep the machine awake when battery is healthy (>30%)
-- Hard safety cutoff at 15% battery
+## Claude Code & Codex Hooks
 
-## Roadmap
+On startup Agent-awake writes ready-to-use hook snippets to:
 
-- [x] Core keep-awake + Telegram bot
-- [x] Real battery reading
-- [x] Agent detection
-- [x] Multi-agent prioritization
-- [x] Antigravity + Codex support
-- [ ] Lid-close action override ("Do nothing")
-- [ ] System tray icon
-- [ ] Configurable priorities & battery thresholds
-- [ ] Official Claude Code / Codex hooks
+- `%TEMP%\agent-awake\claude-hooks-snippet.json`
+- `%TEMP%\agent-awake\codex-hooks-snippet.json`
+
+Merge them into:
+
+- Claude Code → `~/.claude/settings.json`
+- Codex → `~/.codex/hooks.json`
+
+These hooks create `.active` marker files so Agent-awake knows real work is happening (more accurate than process name alone).
+
+## Priority System
+
+| Priority | Agents                                      | Behavior                          |
+|----------|---------------------------------------------|-----------------------------------|
+| High     | Claude, Codex, Antigravity, Cursor          | Always prefer keep-awake          |
+| Normal   | Ollama, Aider, Hermes, Goose, Cline…        | Keep awake                        |
+| Low      | Open WebUI, ComfyUI, SillyTavern…           | Only if battery > configured min  |
 
 ## License
 

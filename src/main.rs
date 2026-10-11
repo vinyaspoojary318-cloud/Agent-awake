@@ -2,150 +2,241 @@ use anyhow::Result;
 use log::{info, warn};
 use teloxide::prelude::*;
 use tokio::time::{sleep, Duration};
+use std::sync::Arc;
 
 mod power;
 mod battery;
 mod agents;
+mod config;
+mod lid;
+mod hooks;
 
 use agents::Priority;
+use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
-
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    info!("Starting Agent-awake...");
+    info!("Starting Agent-awake v0.2...");
+
+    let cfg = Arc::new(config::load()?);
+    info!("Config loaded (cutoff={}%, config file: {})", cfg.battery_cutoff, config::path_display());
+
+    // Generate hook snippets for the user
+    let _ = hooks::install_claude_hooks();
+    let _ = hooks::install_codex_hooks();
 
     let token = std::env::var("TELOXIDE_TOKEN")
         .expect("TELOXIDE_TOKEN must be set in .env file");
 
     let bot = Bot::new(token);
+    let cfg_monitor = cfg.clone();
 
     // Background monitor
-    tokio::spawn(async {
-        background_monitor().await;
+    tokio::spawn(async move {
+        background_monitor(cfg_monitor).await;
     });
 
-    info!("Bot is running. Send /help to your bot.");
-
-    teloxide::repl(bot, |bot: Bot, msg: Message| async move {
-        if let Some(text) = msg.text() {
-            let chat_id = msg.chat.id;
-
-            match text.trim() {
-                "/start" | "/help" => {
-                    let help = "Agent-awake is running.\n\n\
-Available commands:\n\
-/status   - Current status + agent priorities\n\
-/awake    - Force keep system awake\n\
-/sleep    - Allow normal sleep again\n\
-/battery  - Battery information\n\
-/help     - Show this message\n\n\
-Multi-agent prioritization is active.\n\
-High priority agents (Claude, Codex, Antigravity, Cursor) keep the system awake preferentially.";
-                    bot.send_message(chat_id, help).await?;
-                }
-
-                "/status" => {
-                    let status = get_status();
-                    bot.send_message(chat_id, status).await?;
-                }
-
-                "/awake" => {
-                    match power::keep_awake(true) {
-                        Ok(_) => bot.send_message(chat_id, "✅ System will stay awake.").await?,
-                        Err(e) => bot.send_message(chat_id, format!("❌ Failed: {}", e)).await?,
-                    };
-                }
-
-                "/sleep" => {
-                    match power::keep_awake(false) {
-                        Ok(_) => bot.send_message(chat_id, "😴 Normal sleep behavior restored.").await?,
-                        Err(e) => bot.send_message(chat_id, format!("❌ Failed: {}", e)).await?,
-                    };
-                }
-
-                "/battery" => {
-                    let info = battery::get_battery_info();
-                    bot.send_message(chat_id, info).await?;
-                }
-
-                _ => {}
-            }
+    // Restore lid action on Ctrl+C
+    let restore = cfg.restore_lid_on_exit;
+    ctrlc::set_handler(move || {
+        if restore {
+            let _ = lid::restore_default();
         }
-        Ok(())
+        std::process::exit(0);
+    }).ok();
+
+    info!("Bot is running. Send /help");
+
+    let cfg_bot = cfg.clone();
+    teloxide::repl(bot, move |bot: Bot, msg: Message| {
+        let cfg = cfg_bot.clone();
+        async move {
+            if let Some(text) = msg.text() {
+                let chat_id = msg.chat.id;
+
+                match text.trim() {
+                    "/start" | "/help" => {
+                        let help = format!(
+                            "Agent-awake v0.2 is running.\n\n\
+Commands:\n\
+/status   - Status + priorities\n\
+/awake    - Force keep awake\n\
+/sleep    - Allow sleep\n\
+/battery  - Battery info\n\
+/lid      - Lid-close override status\n\
+/config   - Show current config\n\
+/help     - This message\n\n\
+Battery cutoff: {}%\n\
+Lid override: {}\n\
+Config file: {}",
+                            cfg.battery_cutoff,
+                            if cfg.override_lid_close { "enabled" } else { "disabled" },
+                            config::path_display()
+                        );
+                        bot.send_message(chat_id, help).await?;
+                    }
+
+                    "/status" => {
+                        bot.send_message(chat_id, get_status(&cfg)).await?;
+                    }
+
+                    "/awake" => {
+                        match power::keep_awake(true) {
+                            Ok(_) => {
+                                if cfg.override_lid_close {
+                                    let _ = lid::set_do_nothing();
+                                }
+                                bot.send_message(chat_id, "✅ System will stay awake.").await?;
+                            }
+                            Err(e) => bot.send_message(chat_id, format!("❌ {}", e)).await?,
+                        };
+                    }
+
+                    "/sleep" => {
+                        let _ = power::keep_awake(false);
+                        if cfg.restore_lid_on_exit {
+                            let _ = lid::restore_default();
+                        }
+                        bot.send_message(chat_id, "😴 Normal sleep restored.").await?;
+                    }
+
+                    "/battery" => {
+                        bot.send_message(chat_id, battery::get_battery_info()).await?;
+                    }
+
+                    "/lid" => {
+                        let status = if lid::is_overridden() {
+                            "Lid-close is currently set to **Do nothing**"
+                        } else {
+                            "Lid-close is using the normal system setting"
+                        };
+                        bot.send_message(chat_id, status).await?;
+                    }
+
+                    "/config" => {
+                        let text = format!(
+                            "Current config:\n\
+• Battery cutoff: {}%\n\
+• Low-priority min battery: {}%\n\
+• Override lid-close: {}\n\
+• Restore lid on exit: {}\n\
+• Monitor interval: {}s\n\n\
+Edit: {}",
+                            cfg.battery_cutoff,
+                            cfg.low_priority_min_battery,
+                            cfg.override_lid_close,
+                            cfg.restore_lid_on_exit,
+                            cfg.monitor_interval_secs,
+                            config::path_display()
+                        );
+                        bot.send_message(chat_id, text).await?;
+                    }
+
+                    _ => {}
+                }
+            }
+            Ok(())
+        }
     })
     .await;
+
+    // Cleanup
+    if cfg.restore_lid_on_exit {
+        let _ = lid::restore_default();
+    }
 
     Ok(())
 }
 
-fn get_status() -> String {
+fn get_status(cfg: &Config) -> String {
     let battery = battery::get_battery_info();
     let awake = power::is_awake();
     let agents_text = agents::format_agents_for_status();
+    let hook_agents = hooks::active_hook_agents();
     let highest = agents::highest_priority();
 
     let priority_note = match highest {
         Some(Priority::Critical) | Some(Priority::High) => {
-            "\n\n⚡ High priority agent active → keep-awake preferred"
+            "\n\n⚡ High priority agent active"
         }
-        Some(Priority::Normal) => "\n\n🟢 Normal priority agents running",
+        Some(Priority::Normal) => "\n\n🟢 Normal priority agents",
         Some(Priority::Low) => "\n\n⚪ Only low priority agents",
         None => "",
     };
 
+    let hooks_text = if hook_agents.is_empty() {
+        String::new()
+    } else {
+        format!("\n\nHook-active: {}", hook_agents.join(", "))
+    };
+
     format!(
         "📊 Status\n\n\
-Keep Awake: {}\n\n\
+Keep Awake: {}\n\
+Lid Override: {}\n\n\
 {}\n\n\
-Running Agents:\n{}{}",
+Running Agents:\n{}{}{}\n\n\
+Cutoff: {}%",
         if awake { "🟢 ON" } else { "⚪ OFF" },
+        if lid::is_overridden() { "Do nothing" } else { "Normal" },
         battery,
         agents_text,
-        priority_note
+        priority_note,
+        hooks_text,
+        cfg.battery_cutoff
     )
 }
 
-/// Background task with priority-aware keep-awake logic.
-async fn background_monitor() {
-    info!("Background agent monitor started (with prioritization)");
+async fn background_monitor(cfg: Arc<Config>) {
+    info!("Background monitor started");
 
     loop {
         let agents = agents::detect_running_agents();
+        let hook_agents = hooks::active_hook_agents();
         let currently_awake = power::is_awake();
-        let highest = agents.iter().map(|a| a.priority).max();
 
-        // Decision logic
-        let should_be_awake = match highest {
-            Some(Priority::Critical) | Some(Priority::High) => true,
-            Some(Priority::Normal) => true,  // still keep awake for normal agents
-            Some(Priority::Low) => {
-                // Only keep awake for low priority if battery is healthy
-                match battery::get_battery_percent() {
-                    Some(p) if p > 30 => true,
-                    _ => false,
+        let highest = agents.iter().map(|a| a.priority).max();
+        let has_hooks = !hook_agents.is_empty();
+
+        let should_be_awake = if has_hooks {
+            true // hooks indicate real work
+        } else {
+            match highest {
+                Some(Priority::Critical) | Some(Priority::High) => true,
+                Some(Priority::Normal) => true,
+                Some(Priority::Low) => {
+                    match battery::get_battery_percent() {
+                        Some(p) if p > cfg.low_priority_min_battery => true,
+                        _ => false,
+                    }
                 }
+                None => false,
             }
-            None => false,
         };
 
         if should_be_awake && !currently_awake {
-            match power::keep_awake(true) {
-                Ok(_) => info!("Auto-enabled keep-awake (priority-aware)"),
-                Err(e) => warn!("Failed to auto-enable keep-awake: {}", e),
+            if power::keep_awake(true).is_ok() {
+                info!("Auto-enabled keep-awake");
+                if cfg.override_lid_close {
+                    let _ = lid::set_do_nothing();
+                }
             }
         }
 
-        // Safety: force disable on very low battery
+        // Safety cutoff
         if let Some(percent) = battery::get_battery_percent() {
-            if percent <= 15 && power::is_awake() {
+            if percent <= cfg.battery_cutoff && power::is_awake() {
                 let _ = power::keep_awake(false);
-                warn!("Battery low ({}%). Keep-awake disabled for safety.", percent);
+                if cfg.restore_lid_on_exit {
+                    let _ = lid::restore_default();
+                }
+                warn!("Battery {}% ≤ cutoff {}%. Keep-awake disabled.", percent, cfg.battery_cutoff);
             }
         }
 
-        sleep(Duration::from_secs(20)).await;
+        sleep(Duration::from_secs(cfg.monitor_interval_secs)).await;
     }
 }
