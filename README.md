@@ -1,18 +1,18 @@
 # Agent-awake
 
 **Keep your AI agents running even when you close the laptop lid.**  
-Telegram remote control • Multi-agent prioritization • Lid-close override • Configurable safety
+Telegram remote control • System tray • Multi-agent prioritization • Lid-close override
 
 ## Features (v0.2)
 
 - ✅ Keep Windows awake while AI agents work
-- ✅ **Lid-close → Do nothing** (automatic while agents run)
+- ✅ **System tray icon** (right-click menu: Keep Awake / Allow Sleep / Quit)
+- ✅ **Lid-close → Do nothing** while agents run
 - ✅ Telegram bot remote control
 - ✅ **Configurable battery cutoff** (default 15%)
 - ✅ Multi-agent prioritization (High / Normal / Low)
 - ✅ Claude Code + Codex + Antigravity detection
-- ✅ Hook support (snippets generated for Claude Code & Codex)
-- ⏳ System tray icon (foundation added, polish coming)
+- ✅ Hook support (snippets for Claude Code & Codex)
 
 ## Quick Start
 
@@ -20,13 +20,33 @@ Telegram remote control • Multi-agent prioritization • Lid-close override �
 git clone https://github.com/vinyaspoojary318-cloud/Agent-awake.git
 cd Agent-awake
 cp .env.example .env
-# Add your TELOXIDE_TOKEN
+# Add your TELOXIDE_TOKEN from @BotFather
 cargo run
 ```
 
+Release build:
+```bash
+cargo build --release
+# → target/release/agent-awake.exe
+```
+
+## System Tray
+
+When the app runs you get a tray icon:
+
+- **Green** = keep-awake is ON
+- **Gray** = normal sleep behavior
+
+Right-click menu:
+
+- Keep Awake
+- Allow Sleep
+- Refresh Status
+- Quit Agent-awake
+
 ## Configuration
 
-A `config.toml` is created automatically (usually under `%APPDATA%\agent-awake\config.toml`).
+Auto-created (usually `%APPDATA%\agent-awake\config.toml`):
 
 ```toml
 battery_cutoff = 15
@@ -36,41 +56,36 @@ restore_lid_on_exit = true
 monitor_interval_secs = 20
 ```
 
-You can also set `BATTERY_CUTOFF` and `LOW_PRIORITY_MIN_BATTERY` in `.env`.
+Env overrides: `BATTERY_CUTOFF`, `LOW_PRIORITY_MIN_BATTERY`
 
 ## Telegram Commands
 
-| Command    | Description                        |
-|------------|------------------------------------|
-| `/status`  | Full status + priorities + lid     |
-| `/awake`   | Force keep awake + lid override    |
-| `/sleep`   | Restore normal sleep + lid         |
-| `/battery` | Battery details                    |
-| `/lid`     | Lid-close override status          |
-| `/config`  | Show current configuration         |
-| `/help`    | Help                               |
+| Command    | Description                     |
+|------------|---------------------------------|
+| `/status`  | Status + priorities + lid       |
+| `/awake`   | Force keep awake + lid override |
+| `/sleep`   | Restore normal sleep + lid      |
+| `/battery` | Battery details                 |
+| `/lid`     | Lid-close override status       |
+| `/config`  | Show current configuration      |
+| `/help`    | Help                            |
 
 ## Claude Code & Codex Hooks
 
-On startup Agent-awake writes ready-to-use hook snippets to:
+On startup, snippets are written to `%TEMP%\agent-awake\`:
 
-- `%TEMP%\agent-awake\claude-hooks-snippet.json`
-- `%TEMP%\agent-awake\codex-hooks-snippet.json`
+- `claude-hooks-snippet.json` → merge into `~/.claude/settings.json`
+- `codex-hooks-snippet.json` → merge into `~/.codex/hooks.json`
 
-Merge them into:
-
-- Claude Code → `~/.claude/settings.json`
-- Codex → `~/.codex/hooks.json`
-
-These hooks create `.active` marker files so Agent-awake knows real work is happening (more accurate than process name alone).
+Hooks create `.active` markers so detection is more accurate than process names alone.
 
 ## Priority System
 
-| Priority | Agents                                      | Behavior                          |
-|----------|---------------------------------------------|-----------------------------------|
-| High     | Claude, Codex, Antigravity, Cursor          | Always prefer keep-awake          |
-| Normal   | Ollama, Aider, Hermes, Goose, Cline…        | Keep awake                        |
-| Low      | Open WebUI, ComfyUI, SillyTavern…           | Only if battery > configured min  |
+| Priority | Agents                             | Behavior                         |
+|----------|------------------------------------|----------------------------------|
+| High     | Claude, Codex, Antigravity, Cursor | Prefer keep-awake                |
+| Normal   | Ollama, Aider, Hermes, Goose…      | Keep awake                       |
+| Low      | Open WebUI, ComfyUI, SillyTavern…  | Only if battery above threshold  |
 
 ## License
 

@@ -10,6 +10,7 @@ mod agents;
 mod config;
 mod lid;
 mod hooks;
+mod tray;
 
 use agents::Priority;
 use config::Config;
@@ -28,6 +29,9 @@ async fn main() -> Result<()> {
     let _ = hooks::install_claude_hooks();
     let _ = hooks::install_codex_hooks();
 
+    // System tray (runs on its own thread)
+    tray::start(cfg.override_lid_close, cfg.restore_lid_on_exit);
+
     let token = std::env::var("TELOXIDE_TOKEN")
         .expect("TELOXIDE_TOKEN must be set in .env file");
 
@@ -45,10 +49,11 @@ async fn main() -> Result<()> {
         if restore {
             let _ = lid::restore_default();
         }
+        let _ = power::keep_awake(false);
         std::process::exit(0);
     }).ok();
 
-    info!("Bot is running. Send /help");
+    info!("Bot is running. System tray is active. Send /help in Telegram.");
 
     let cfg_bot = cfg.clone();
     teloxide::repl(bot, move |bot: Bot, msg: Message| {
@@ -69,6 +74,7 @@ Commands:\n\
 /lid      - Lid-close override status\n\
 /config   - Show current config\n\
 /help     - This message\n\n\
+Also use the system tray icon (right-click).\n\n\
 Battery cutoff: {}%\n\
 Lid override: {}\n\
 Config file: {}",
@@ -109,7 +115,7 @@ Config file: {}",
 
                     "/lid" => {
                         let status = if lid::is_overridden() {
-                            "Lid-close is currently set to **Do nothing**"
+                            "Lid-close is currently set to Do nothing"
                         } else {
                             "Lid-close is using the normal system setting"
                         };
@@ -147,6 +153,7 @@ Edit: {}",
     if cfg.restore_lid_on_exit {
         let _ = lid::restore_default();
     }
+    let _ = power::keep_awake(false);
 
     Ok(())
 }
@@ -202,7 +209,7 @@ async fn background_monitor(cfg: Arc<Config>) {
         let has_hooks = !hook_agents.is_empty();
 
         let should_be_awake = if has_hooks {
-            true // hooks indicate real work
+            true
         } else {
             match highest {
                 Some(Priority::Critical) | Some(Priority::High) => true,
@@ -226,7 +233,6 @@ async fn background_monitor(cfg: Arc<Config>) {
             }
         }
 
-        // Safety cutoff
         if let Some(percent) = battery::get_battery_percent() {
             if percent <= cfg.battery_cutoff && power::is_awake() {
                 let _ = power::keep_awake(false);
