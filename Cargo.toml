@@ -1,6 +1,6 @@
 [package]
 name = "agent-awake"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Keep AI agents running even with the laptop lid closed. Remote control via Telegram."
 license = "MIT"
@@ -19,6 +19,7 @@ toml = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 directories = "5"
 ctrlc = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_System_Power",

@@ -1,14 +1,12 @@
 use sysinfo::{System, ProcessesToUpdate};
 use std::collections::HashMap;
 
-/// Priority levels for agents.
-/// Higher priority agents are preferred when resources (battery/heat) are limited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
-    Critical = 3, // Must keep awake (e.g. long important runs)
-    High = 2,     // Important coding agents
-    Normal = 1,   // Regular agents / local models
-    Low = 0,      // Background / less important
+    Critical = 3,
+    High = 2,
+    Normal = 1,
+    Low = 0,
 }
 
 impl Priority {
@@ -38,17 +36,20 @@ pub struct DetectedAgent {
     pub pid: u32,
 }
 
-/// Known agents with their default priority.
+/// Broader zero-config keyword list (process name fragments).
 fn agent_definitions() -> Vec<(&'static str, Priority)> {
     vec![
-        // High priority - main coding agents
+        // High — main coding agents
         ("claude", Priority::High),
         ("codex", Priority::High),
         ("antigravity", Priority::High),
-        ("agy", Priority::High),           // Antigravity CLI short name
+        ("agy", Priority::High),
         ("cursor", Priority::High),
+        ("windsurf", Priority::High),
+        ("aide", Priority::High),
+        ("zed", Priority::Normal), // editor; may host agents
 
-        // Normal priority
+        // Normal — CLIs & local inference
         ("ollama", Priority::Normal),
         ("lm studio", Priority::Normal),
         ("lmstudio", Priority::Normal),
@@ -58,23 +59,31 @@ fn agent_definitions() -> Vec<(&'static str, Priority)> {
         ("opencode", Priority::Normal),
         ("goose", Priority::Normal),
         ("cline", Priority::Normal),
-
-        // Lower priority / local model UIs
-        ("open-webui", Priority::Low),
-        ("textgen", Priority::Low),
-        ("text-generation-webui", Priority::Low),
-        ("comfyui", Priority::Low),
-        ("invokeai", Priority::Low),
-        ("sillytavern", Priority::Low),
-        ("kobold", Priority::Low),
-        ("tabbyapi", Priority::Low),
+        ("roo", Priority::Normal),
+        ("copilot", Priority::Normal),
+        ("gemini", Priority::Normal),
+        ("gpt", Priority::Low),
         ("vllm", Priority::Normal),
         ("llama-server", Priority::Normal),
         ("llama.cpp", Priority::Normal),
+        ("text-generation", Priority::Low),
+        ("tabbyapi", Priority::Normal),
+        ("kobold", Priority::Low),
+        ("comfyui", Priority::Low),
+        ("invokeai", Priority::Low),
+        ("open-webui", Priority::Low),
+        ("sillytavern", Priority::Low),
+        ("oobabooga", Priority::Low),
+        ("faraday", Priority::Normal),
+        ("jan.exe", Priority::Normal),
+        ("nomic", Priority::Low),
+        ("anythingllm", Priority::Low),
+        ("privategpt", Priority::Low),
+        ("localai", Priority::Normal),
+        ("lm-studio", Priority::Normal),
     ]
 }
 
-/// Detect running agents and assign priorities.
 pub fn detect_running_agents() -> Vec<DetectedAgent> {
     let mut sys = System::new();
     sys.refresh_processes(ProcessesToUpdate::All);
@@ -86,15 +95,18 @@ pub fn detect_running_agents() -> Vec<DetectedAgent> {
         let name = process.name().to_string_lossy().to_lowercase();
         let display_name = process.name().to_string_lossy().to_string();
 
+        // Skip obvious non-agents
+        if name.contains("agent-awake") {
+            continue;
+        }
+
         for (keyword, priority) in &definitions {
             if name.contains(keyword) {
-                // Keep the highest priority if the same process matches multiple keywords
                 let entry = found.entry(display_name.clone()).or_insert(DetectedAgent {
                     name: display_name.clone(),
                     priority: *priority,
                     pid: pid.as_u32(),
                 });
-
                 if *priority > entry.priority {
                     entry.priority = *priority;
                 }
@@ -104,48 +116,26 @@ pub fn detect_running_agents() -> Vec<DetectedAgent> {
     }
 
     let mut list: Vec<DetectedAgent> = found.into_values().collect();
-
-    // Sort by priority (highest first), then by name
-    list.sort_by(|a, b| {
-        b.priority
-            .cmp(&a.priority)
-            .then_with(|| a.name.cmp(&b.name))
-    });
-
+    list.sort_by(|a, b| b.priority.cmp(&a.priority).then_with(|| a.name.cmp(&b.name)));
     list
 }
 
-/// Returns true if any known agent is currently running.
 pub fn any_agent_running() -> bool {
     !detect_running_agents().is_empty()
 }
 
-/// Returns the highest priority among currently running agents.
 pub fn highest_priority() -> Option<Priority> {
-    detect_running_agents()
-        .into_iter()
-        .map(|a| a.priority)
-        .max()
+    detect_running_agents().into_iter().map(|a| a.priority).max()
 }
 
-/// Nice formatted list for Telegram status.
 pub fn format_agents_for_status() -> String {
     let agents = detect_running_agents();
-
     if agents.is_empty() {
         return "None detected".to_string();
     }
-
     agents
         .iter()
-        .map(|a| {
-            format!
-                "{} {} ({})",
-                a.priority.emoji(),
-                a.name,
-                a.priority.as_str()
-            )
-        })
+        .map(|a| format!("{} {} ({})", a.priority.emoji(), a.name, a.priority.as_str()))
         .collect::<Vec<_>>()
         .join("\n")
 }
