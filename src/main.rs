@@ -7,12 +7,12 @@ mod power;
 mod battery;
 mod agents;
 
+use agents::Priority;
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Load .env file
     dotenvy::dotenv().ok();
 
-    // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     info!("Starting Agent-awake...");
@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
 
     let bot = Bot::new(token);
 
-    // Start background monitor (auto keep-awake when agents are running)
+    // Background monitor
     tokio::spawn(async {
         background_monitor().await;
     });
@@ -37,12 +37,13 @@ async fn main() -> Result<()> {
                 "/start" | "/help" => {
                     let help = "Agent-awake is running.\n\n\
 Available commands:\n\
-/status  - Current status\n\
-/awake   - Force keep system awake\n\
-/sleep   - Allow normal sleep again\n\
-/battery - Battery information\n\
-/help    - Show this message\n\n\
-The system will automatically stay awake while AI agents are detected.";
+/status   - Current status + agent priorities\n\
+/awake    - Force keep system awake\n\
+/sleep    - Allow normal sleep again\n\
+/battery  - Battery information\n\
+/help     - Show this message\n\n\
+Multi-agent prioritization is active.\n\
+High priority agents (Claude, Codex, Antigravity, Cursor) keep the system awake preferentially.";
                     bot.send_message(chat_id, help).await?;
                 }
 
@@ -83,48 +84,61 @@ The system will automatically stay awake while AI agents are detected.";
 fn get_status() -> String {
     let battery = battery::get_battery_info();
     let awake = power::is_awake();
-    let agents = agents::detect_running_agents();
+    let agents_text = agents::format_agents_for_status();
+    let highest = agents::highest_priority();
 
-    let agents_text = if agents.is_empty() {
-        "None detected".to_string()
-    } else {
-        agents.iter().map(|a| format!("• {}", a)).collect::<Vec<_>>().join("\n")
+    let priority_note = match highest {
+        Some(Priority::Critical) | Some(Priority::High) => {
+            "\n\n⚡ High priority agent active → keep-awake preferred"
+        }
+        Some(Priority::Normal) => "\n\n🟢 Normal priority agents running",
+        Some(Priority::Low) => "\n\n⚪ Only low priority agents",
+        None => "",
     };
 
     format!(
         "📊 Status\n\n\
 Keep Awake: {}\n\n\
 {}\n\n\
-Running Agents:\n{}",
+Running Agents:\n{}{}",
         if awake { "🟢 ON" } else { "⚪ OFF" },
         battery,
-        agents_text
+        agents_text,
+        priority_note
     )
 }
 
-/// Background task that automatically enables keep-awake when agents are running.
+/// Background task with priority-aware keep-awake logic.
 async fn background_monitor() {
-    info!("Background agent monitor started");
+    info!("Background agent monitor started (with prioritization)");
 
     loop {
-        let agents_running = agents::any_agent_running();
+        let agents = agents::detect_running_agents();
         let currently_awake = power::is_awake();
+        let highest = agents.iter().map(|a| a.priority).max();
 
-        if agents_running && !currently_awake {
+        // Decision logic
+        let should_be_awake = match highest {
+            Some(Priority::Critical) | Some(Priority::High) => true,
+            Some(Priority::Normal) => true,  // still keep awake for normal agents
+            Some(Priority::Low) => {
+                // Only keep awake for low priority if battery is healthy
+                match battery::get_battery_percent() {
+                    Some(p) if p > 30 => true,
+                    _ => false,
+                }
+            }
+            None => false,
+        };
+
+        if should_be_awake && !currently_awake {
             match power::keep_awake(true) {
-                Ok(_) => info!("Auto-enabled keep-awake (agents detected)"),
+                Ok(_) => info!("Auto-enabled keep-awake (priority-aware)"),
                 Err(e) => warn!("Failed to auto-enable keep-awake: {}", e),
             }
-        } else if !agents_running && currently_awake {
-            // Optional: auto disable when no agents are running
-            // Currently we leave it ON so manual /awake stays active.
-            // Uncomment the next lines if you want strict auto mode:
-            //
-            // let _ = power::keep_awake(false);
-            // info!("Auto-disabled keep-awake (no agents)");
         }
 
-        // Also check battery cutoff (example: stop below 15%)
+        // Safety: force disable on very low battery
         if let Some(percent) = battery::get_battery_percent() {
             if percent <= 15 && power::is_awake() {
                 let _ = power::keep_awake(false);
