@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/banner.svg" alt="Agent-awake — Close the lid. Let your agents cook." width="100%" />
+
 # Agent-awake
 
 **Close the lid. Let your agents cook.**
@@ -304,6 +306,7 @@ Agent-awake/
 ├── Cargo.toml
 ├── LICENSE
 ├── README.md
+├── docs/banner.svg
 ├── .env.example
 ├── .github/workflows/ci.yml      # windows-latest build + artifact
 └── src/
@@ -319,6 +322,8 @@ Agent-awake/
     ├── audit.rs                  # audit.log + recent()
     ├── local_models.rs           # Ollama unload
     ├── hooks.rs                  # Claude / Codex markers
+    ├── stuck.rs                  # idle-agent Telegram alerts
+    ├── notify.rs                 # last Telegram chat for alerts
     └── tray.rs                   # tray-icon + menu
 ```
 

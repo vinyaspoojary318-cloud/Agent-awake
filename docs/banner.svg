@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#020617"/>
+      <stop offset="50%" style="stop-color:#0a1628"/>
+      <stop offset="100%" style="stop-color:#020617"/>
+    </linearGradient>
+    <linearGradient id="glowL" x1="0%" y1="50%" x2="40%" y2="50%">
+      <stop offset="0%" style="stop-color:#1d4ed8;stop-opacity:0.55"/>
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="glowR" x1="100%" y1="50%" x2="60%" y2="50%">
+      <stop offset="0%" style="stop-color:#0891b2;stop-opacity:0.45"/>
+      <stop offset="100%" style="stop-color:#0891b2;stop-opacity:0"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e3a5f" stroke-width="0.5" opacity="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <rect width="1280" height="640" fill="url(#glowL)"/>
+  <rect width="1280" height="640" fill="url(#glowR)"/>
+  <g fill="#22d3ee" opacity="0.25">
+    <circle cx="80" cy="80" r="1.5"/><circle cx="100" cy="100" r="1"/><circle cx="1200" cy="100" r="1.5"/>
+    <circle cx="1180" cy="120" r="1"/><circle cx="90" cy="540" r="1"/><circle cx="1190" cy="560" r="1.5"/>
+  </g>
+  <text x="640" y="250" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#f8fafc">Agent-awake</text>
+  <text x="640" y="310" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" fill="#22d3ee">Close the lid. Let your agents cook.</text>
+  <line x1="480" y1="350" x2="800" y2="350" stroke="#22d3ee" stroke-width="1.5" opacity="0.7"/>
+  <circle cx="640" cy="350" r="4" fill="#22d3ee"/>
+  <g fill="none" stroke="#67e8f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(280,400)">
+      <rect x="8" y="8" width="48" height="32" rx="3"/><path d="M0 44h64l-6-8H6z"/>
+    </g>
+    <g transform="translate(480,400)">
+      <circle cx="32" cy="28" r="18"/><path d="M20 28h24M32 16v24M24 20l16 16M40 20L24 36"/>
+    </g>
+    <g transform="translate(680,400)">
+      <path d="M8 32 L56 12 L28 48 L24 36z"/><path d="M56 12 L24 36"/>
+    </g>
+    <g transform="translate(880,400)">
+      <rect x="8" y="16" width="44" height="24" rx="3"/><path d="M52 24v8"/><rect x="14" y="22" width="8" height="12" fill="#67e8f9" stroke="none"/><rect x="26" y="22" width="8" height="12" fill="#67e8f9" stroke="none"/><rect x="38" y="22" width="6" height="12" fill="#67e8f9" stroke="none"/>
+    </g>
+  </g>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#94a3b8" text-anchor="middle">
+    <text x="312" y="480">Lid Closed</text>
+    <text x="512" y="480">AI Agent Active</text>
+    <text x="712" y="480">Telegram Alerts</text>
+    <text x="912" y="480">Power Efficient</text>
+  </g>
+</svg>
