@@ -3,18 +3,11 @@
 
 use log::info;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use sysinfo::System;
 
 use crate::agents::{detect_running_agents, DetectedAgent};
-
-lazy_static::lazy_static! {
-    static ref TRACKER: Mutex<StuckTracker> = Mutex::new(StuckTracker::default());
-}
-
-// Avoid adding lazy_static dep if not present — use OnceLock instead.
-use std::sync::OnceLock;
 
 fn tracker() -> &'static Mutex<StuckTracker> {
     static T: OnceLock<Mutex<StuckTracker>> = OnceLock::new();
