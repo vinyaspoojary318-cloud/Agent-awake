@@ -8,12 +8,14 @@ use tray_icon::{
     TrayIcon, TrayIconBuilder, TrayIconEvent, TrayIconEventReceiver,
 };
 
+use crate::audit;
+use crate::bagmode;
 use crate::lid;
 use crate::power;
+use crate::thermal;
 
 static TRAY_RUNNING: AtomicBool = AtomicBool::new(false);
 
-/// Simple 32x32 RGBA icon (solid color).
 fn make_icon(r: u8, g: u8, b: u8) -> tray_icon::Icon {
     let size = 32;
     let mut rgba = vec![0u8; size * size * 4];
@@ -26,19 +28,32 @@ fn make_icon(r: u8, g: u8, b: u8) -> tray_icon::Icon {
     tray_icon::Icon::from_rgba(rgba, size as u32, size as u32).expect("Failed to create icon")
 }
 
-fn icon_for_state(awake: bool) -> tray_icon::Icon {
-    if awake {
+fn icon_for_state(awake: bool, bag: bool) -> tray_icon::Icon {
+    if awake && bag {
+        make_icon(30, 144, 255) // blue = awake + bag mode
+    } else if awake {
         make_icon(40, 200, 80) // green = awake
     } else {
-        make_icon(140, 140, 140) // gray = normal
+        make_icon(140, 140, 140) // gray
     }
 }
 
+fn tooltip_text() -> String {
+    let awake = power::is_awake();
+    let bag = bagmode::is_active();
+    let cpu = thermal::cpu_usage();
+    format!(
+        "Agent-awake | {} | {} | CPU {:.0}%",
+        if awake { "AWAKE" } else { "sleep ok" },
+        if bag { "BAG" } else { "normal" },
+        cpu
+    )
+}
+
 /// Start the system tray on a background thread.
-/// Returns immediately. Call this once at startup.
 pub fn start(override_lid: bool, restore_lid: bool) {
     if TRAY_RUNNING.swap(true, Ordering::SeqCst) {
-        return; // already running
+        return;
     }
 
     thread::spawn(move || {
@@ -50,26 +65,25 @@ pub fn start(override_lid: bool, restore_lid: bool) {
 }
 
 fn run_tray(override_lid: bool, restore_lid: bool) -> Result<(), Box<dyn std::error::Error>> {
-    // On Windows, tray-icon needs a message pump.
-    // We create the tray and then pump Win32 messages + poll tray events.
-
     let awake_item = MenuItem::new("Keep Awake", true, None);
     let sleep_item = MenuItem::new("Allow Sleep", true, None);
-    let status_item = MenuItem::new("Refresh Status", true, None);
+    let bag_item = MenuItem::new("Toggle Bag Mode", true, None);
+    let status_item = MenuItem::new("Log Status", true, None);
     let quit_item = MenuItem::new("Quit Agent-awake", true, None);
 
     let menu = Menu::new();
     menu.append(&awake_item)?;
     menu.append(&sleep_item)?;
     menu.append(&PredefinedMenuItem::separator())?;
+    menu.append(&bag_item)?;
     menu.append(&status_item)?;
     menu.append(&PredefinedMenuItem::separator())?;
     menu.append(&quit_item)?;
 
     let mut tray: TrayIcon = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_tooltip("Agent-awake")
-        .with_icon(icon_for_state(power::is_awake()))
+        .with_tooltip(&tooltip_text())
+        .with_icon(icon_for_state(power::is_awake(), bagmode::is_active()))
         .build()?;
 
     info!("System tray icon started");
@@ -78,23 +92,19 @@ fn run_tray(override_lid: bool, restore_lid: bool) -> Result<(), Box<dyn std::er
     let tray_channel: &TrayIconEventReceiver = TrayIconEvent::receiver();
 
     loop {
-        // Update icon + tooltip periodically
         let awake = power::is_awake();
-        let tip = if awake {
-            "Agent-awake — ON (keeping system awake)"
-        } else {
-            "Agent-awake — OFF"
-        };
-        let _ = tray.set_tooltip(Some(tip));
-        let _ = tray.set_icon(Some(icon_for_state(awake)));
+        let bag = bagmode::is_active();
+        let _ = tray.set_tooltip(Some(tooltip_text()));
+        let _ = tray.set_icon(Some(icon_for_state(awake, bag)));
 
-        // Handle menu clicks
         while let Ok(event) = menu_channel.try_recv() {
             if event.id == awake_item.id() {
                 if power::keep_awake(true).is_ok() {
                     if override_lid {
                         let _ = lid::set_do_nothing();
                     }
+                    bagmode::set_active(true);
+                    audit::log_event(true, "tray", "Keep Awake");
                     info!("Tray: Keep Awake");
                 }
             } else if event.id == sleep_item.id() {
@@ -102,37 +112,40 @@ fn run_tray(override_lid: bool, restore_lid: bool) -> Result<(), Box<dyn std::er
                 if restore_lid {
                     let _ = lid::restore_default();
                 }
+                bagmode::set_active(false);
+                audit::log_event(false, "tray", "Allow Sleep");
                 info!("Tray: Allow Sleep");
+            } else if event.id == bag_item.id() {
+                let next = !bagmode::is_active();
+                bagmode::set_active(next);
+                info!("Tray: Bag mode -> {}", next);
             } else if event.id == status_item.id() {
                 info!(
-                    "Tray status — awake={}, lid_override={}",
+                    "Tray status — awake={}, bag={}, lid={}, cpu={:.0}%",
                     power::is_awake(),
-                    lid::is_overridden()
+                    bagmode::is_active(),
+                    lid::is_overridden(),
+                    thermal::cpu_usage()
                 );
             } else if event.id == quit_item.id() {
-                info!("Tray: Quit requested");
+                info!("Tray: Quit");
                 if restore_lid {
                     let _ = lid::restore_default();
                 }
                 let _ = power::keep_awake(false);
-                // Drop tray then exit process
+                bagmode::set_active(false);
+                audit::log_event(false, "tray", "Quit");
                 drop(tray);
                 std::process::exit(0);
             }
         }
 
-        // Drain tray icon events (clicks etc.)
-        while let Ok(_e) = tray_channel.try_recv() {
-            // optional: left-click could toggle awake
-        }
+        while let Ok(_e) = tray_channel.try_recv() {}
 
-        // Simple message pump for Windows so the tray stays responsive
         #[cfg(target_os = "windows")]
-        {
-            pump_windows_messages();
-        }
+        pump_windows_messages();
 
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(Duration::from_millis(250));
     }
 }
 

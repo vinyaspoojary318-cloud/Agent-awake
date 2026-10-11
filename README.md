@@ -3,18 +3,21 @@
 **Keep your AI agents running even with the laptop lid closed.**  
 Telegram • System tray • Priorities • Bag mode • Thermal • Audit • Local model intelligence
 
+![CI](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions/workflows/ci.yml/badge.svg)
+
 ## Features (v0.3)
 
 | Area | What you get |
 |------|----------------|
 | Keep-awake | Windows sleep prevention + lid-close → Do nothing |
-| **Security & audit** | `audit.log` of every AWAKE_ON/OFF decision + `/audit` |
-| **Zero-config detection** | Broad process list (Claude, Codex, Antigravity, Cursor, Ollama, LM Studio, Aider, ComfyUI, …) |
-| **Battery health** | Adaptive cutoff (higher floor on battery) + `/battery` guidance |
-| **Bag mode** | Stricter rules for low-priority agents off AC; network-light profile flag |
-| **Thermal (Windows)** | CPU-load proxy for heat; prefer high-priority agents when hot |
-| **Local model intelligence** | Unload Ollama models on low battery / critical heat |
-| Telegram + tray | Full remote + right-click menu |
+| System tray | Green/blue/gray icon + Keep Awake / Sleep / **Bag Mode** / Quit |
+| Security & audit | `audit.log` + `/audit` |
+| Zero-config detection | Claude, Codex, Antigravity, Cursor, Ollama, LM Studio, Aider, … |
+| Battery longevity | Adaptive cutoff on battery + `/battery` |
+| Bag mode | Stricter low-priority rules off AC; tray toggle |
+| Thermal (Windows) | CPU-load heat proxy; prefer high-priority when hot |
+| Local models | Unload Ollama on low battery / critical heat |
+| Telegram | Full remote control |
 
 ## Quick Start
 
@@ -22,21 +25,33 @@ Telegram • System tray • Priorities • Bag mode • Thermal • Audit • L
 git clone https://github.com/vinyaspoojary318-cloud/Agent-awake.git
 cd Agent-awake
 cp .env.example .env
-# set TELOXIDE_TOKEN
+# set TELOXIDE_TOKEN from @BotFather
 cargo run
 ```
 
-## New commands
+Release:
+```bash
+cargo build --release
+# target/release/agent-awake.exe
+```
 
-| Command | Description |
-|---------|-------------|
-| `/audit` | Last keep-awake decisions |
-| `/thermal` | CPU usage + thermal state |
-| `/bag` | Bag mode status |
-| `/battery` | Level + longevity notes |
-| `/config` | Full config including new flags |
+## Tray icon colors
 
-## Config (`config.toml`)
+| Color | Meaning |
+|-------|---------|
+| Green | Keep-awake ON |
+| Blue | Keep-awake ON + bag mode |
+| Gray | Normal sleep allowed |
+
+Right-click: **Keep Awake** · **Allow Sleep** · **Toggle Bag Mode** · **Log Status** · **Quit**
+
+## Telegram commands
+
+`/status` `/awake` `/sleep` `/battery` `/lid` `/config` `/audit` `/thermal` `/bag` `/help`
+
+## Config
+
+Usually `%APPDATA%\agent-awake\config.toml`:
 
 ```toml
 battery_cutoff = 15
@@ -52,14 +67,6 @@ local_model_intelligence = true
 ollama_url = "http://127.0.0.1:11434"
 adaptive_battery_cutoff = true
 ```
-
-## How the new logic works
-
-1. **Audit** — every auto/manual wake change is logged with reason (agents, hooks, battery, thermal).
-2. **Bag mode** — when enabled, low-priority agents on battery do not keep the machine awake.
-3. **Thermal** — high CPU (proxy for heat) blocks low-priority wake; critical heat can unload Ollama.
-4. **Adaptive battery** — on battery, effective cutoff is raised (+5%, max 40%) to protect longevity.
-5. **Local models** — calls Ollama `/api/generate` with `keep_alive: 0` to unload models under stress.
 
 ## License
 
