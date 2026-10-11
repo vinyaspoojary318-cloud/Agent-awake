@@ -11,38 +11,45 @@ pub struct Config {
     pub restore_lid_on_exit: bool,
     pub monitor_interval_secs: u64,
 
-    /// Enable audit logging of keep-awake decisions
     #[serde(default = "default_true")]
     pub audit_log: bool,
 
-    /// Enable bag mode (network-light, thermal-aware) when agents run
     #[serde(default = "default_true")]
     pub bag_mode: bool,
 
-    /// CPU usage % above which we treat system as thermally stressed
     #[serde(default = "default_heat_cpu")]
     pub heat_cpu_threshold: f32,
 
-    /// When heat is high, only High/Critical agents keep system awake
     #[serde(default = "default_true")]
     pub heat_prefer_high_priority: bool,
 
-    /// Try to pause local models (Ollama) when battery/heat is critical
     #[serde(default = "default_true")]
     pub local_model_intelligence: bool,
 
-    /// Ollama base URL for local model control
     #[serde(default = "default_ollama_url")]
     pub ollama_url: String,
 
-    /// Adaptive cutoff: raise cutoff when battery health is poor
     #[serde(default = "default_true")]
     pub adaptive_battery_cutoff: bool,
+
+    /// Telegram alert when an agent looks stuck / waiting for Submit
+    #[serde(default = "default_true")]
+    pub stuck_notify: bool,
+
+    /// Seconds of near-zero CPU before we treat an agent as stuck
+    #[serde(default = "default_stuck_idle")]
+    pub stuck_idle_secs: u64,
+
+    /// Minimum seconds between stuck alerts
+    #[serde(default = "default_stuck_cooldown")]
+    pub stuck_notify_cooldown_secs: u64,
 }
 
 fn default_true() -> bool { true }
 fn default_heat_cpu() -> f32 { 85.0 }
 fn default_ollama_url() -> String { "http://127.0.0.1:11434".into() }
+fn default_stuck_idle() -> u64 { 180 }
+fn default_stuck_cooldown() -> u64 { 300 }
 
 impl Default for Config {
     fn default() -> Self {
@@ -59,6 +66,9 @@ impl Default for Config {
             local_model_intelligence: true,
             ollama_url: default_ollama_url(),
             adaptive_battery_cutoff: true,
+            stuck_notify: true,
+            stuck_idle_secs: 180,
+            stuck_notify_cooldown_secs: 300,
         }
     }
 }

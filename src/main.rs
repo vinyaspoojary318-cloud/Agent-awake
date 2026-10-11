@@ -16,6 +16,8 @@ mod thermal;
 mod battery_health;
 mod bagmode;
 mod local_models;
+mod stuck;
+mod notify;
 
 use agents::Priority;
 use config::Config;
@@ -26,7 +28,7 @@ async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    info!("Starting Agent-awake v0.3...");
+    info!("Starting Agent-awake v0.3.1...");
 
     let cfg = Arc::new(config::load()?);
     info!("Config loaded (cutoff={}%, file: {})", cfg.battery_cutoff, config::path_display());
@@ -40,10 +42,11 @@ async fn main() -> Result<()> {
         .expect("TELOXIDE_TOKEN must be set in .env file");
 
     let bot = Bot::new(token);
+    let bot_monitor = bot.clone();
     let cfg_monitor = cfg.clone();
 
     tokio::spawn(async move {
-        background_monitor(cfg_monitor).await;
+        background_monitor(cfg_monitor, bot_monitor).await;
     });
 
     let restore = cfg.restore_lid_on_exit;
@@ -56,7 +59,7 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }).ok();
 
-    info!("Bot + tray running. Send /help");
+    info!("Bot + tray running. Send /start once so stuck alerts can reach you.");
 
     let cfg_bot = cfg.clone();
     teloxide::repl(bot, move |bot: Bot, msg: Message| {
@@ -64,19 +67,26 @@ async fn main() -> Result<()> {
         async move {
             if let Some(text) = msg.text() {
                 let chat_id = msg.chat.id;
+                notify::remember_chat(chat_id);
+
                 match text.trim() {
                     "/start" | "/help" => {
                         let help = format!(
-                            "Agent-awake v0.3\n\n\
+                            "Agent-awake v0.3.1\n\n\
 /status /awake /sleep /battery /lid /config\n\
 /audit — recent keep-awake decisions\n\
 /thermal — CPU / heat proxy\n\
 /bag — bag mode status\n\n\
-Cutoff: {}% | Bag mode: {} | Audit: {}\n\
-Config: {}",
+Stuck alerts: {} (idle {}s)\n\
+Cutoff: {}% | Bag: {}\n\
+Config: {}\n\n\
+Tip: start terminal agents with auto-approve so Submit is rarer:\n\
+Codex: codex --full-auto\n\
+Claude: claude --permission-mode auto",
+                            cfg.stuck_notify,
+                            cfg.stuck_idle_secs,
                             cfg.battery_cutoff,
                             cfg.bag_mode,
-                            cfg.audit_log,
                             config::path_display()
                         );
                         bot.send_message(chat_id, help).await?;
@@ -136,7 +146,8 @@ Config: {}",
 • Audit log: {}\n\
 • Heat CPU threshold: {}%\n\
 • Local model intelligence: {}\n\
-• Ollama URL: {}\n\n\
+• Ollama URL: {}\n\
+• Stuck notify: {} (idle {}s, cooldown {}s)\n\n\
 File: {}\nAudit: {}",
                             cfg.battery_cutoff,
                             cfg.low_priority_min_battery,
@@ -147,6 +158,9 @@ File: {}\nAudit: {}",
                             cfg.heat_cpu_threshold,
                             cfg.local_model_intelligence,
                             cfg.ollama_url,
+                            cfg.stuck_notify,
+                            cfg.stuck_idle_secs,
+                            cfg.stuck_notify_cooldown_secs,
                             config::path_display(),
                             audit::path_display()
                         );
@@ -204,14 +218,15 @@ fn get_status(cfg: &Config) -> String {
     };
 
     format!(
-        "📊 Status v0.3\n\n\
+        "📊 Status v0.3.1\n\n\
 Keep Awake: {}\n\
 Lid: {}\n\
 {}\n\
 Thermal: {}\n\n\
 {}\n\n\
 Agents:\n{}{}\n\n\
-Effective cutoff: {}%",
+Effective cutoff: {}%\n\
+Stuck alerts: {}",
         if awake { "🟢 ON" } else { "⚪ OFF" },
         if lid::is_overridden() { "Do nothing" } else { "Normal" },
         bagmode::status_line(),
@@ -219,12 +234,13 @@ Effective cutoff: {}%",
         battery,
         agents_text,
         hooks_text,
-        cutoff
+        cutoff,
+        if cfg.stuck_notify { "on" } else { "off" }
     )
 }
 
-async fn background_monitor(cfg: Arc<Config>) {
-    info!("Background monitor v0.3 started");
+async fn background_monitor(cfg: Arc<Config>, bot: Bot) {
+    info!("Background monitor v0.3.1 started");
 
     loop {
         let agents = agents::detect_running_agents();
@@ -283,6 +299,27 @@ async fn background_monitor(cfg: Arc<Config>) {
                         agents.len()
                     );
                     audit::log_event(true, reason, &details);
+                }
+            }
+        }
+
+        // Stuck / waiting-for-Submit heuristic → Telegram
+        if cfg.stuck_notify && power::is_awake() {
+            let stuck_agents =
+                stuck::check_stuck_agents(cfg.stuck_idle_secs, cfg.stuck_notify_cooldown_secs);
+            if !stuck_agents.is_empty() {
+                let msg = stuck::format_stuck_message(&stuck_agents);
+                notify::send_alert(&bot, &msg).await;
+                if cfg.audit_log {
+                    audit::log_event(
+                        true,
+                        "stuck_alert",
+                        &stuck_agents
+                            .iter()
+                            .map(|a| a.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(","),
+                    );
                 }
             }
         }
