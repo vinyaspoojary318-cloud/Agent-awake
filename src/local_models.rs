@@ -12,7 +12,6 @@ pub async fn throttle_ollama(base_url: &str) {
         Err(_) => return,
     };
 
-    // List running models
     let ps_url = format!("{}/api/ps", base_url.trim_end_matches('/'));
     let running = match client.get(&ps_url).send().await {
         Ok(r) if r.status().is_success() => r.json::<serde_json::Value>().await.ok(),
@@ -33,7 +32,10 @@ pub async fn throttle_ollama(base_url: &str) {
         return;
     }
 
-    info!("Local model intelligence: {} Ollama model(s) loaded — requesting unload", models.len());
+    info!(
+        "Local model intelligence: {} Ollama model(s) loaded — requesting unload",
+        models.len()
+    );
 
     for m in models {
         if let Some(name) = m.get("name").and_then(|n| n.as_str()) {
@@ -51,10 +53,11 @@ pub async fn throttle_ollama(base_url: &str) {
 }
 
 pub fn ollama_running_process() -> bool {
-    use sysinfo::{ProcessesToUpdate, System};
+    use sysinfo::System;
     let mut sys = System::new();
-    sys.refresh_processes(ProcessesToUpdate::All);
+    sys.refresh_processes();
     sys.processes().values().any(|p| {
-        p.name().to_string_lossy().to_lowercase().contains("ollama")
+        // sysinfo 0.30: name() returns &str
+        p.name().to_lowercase().contains("ollama")
     })
 }

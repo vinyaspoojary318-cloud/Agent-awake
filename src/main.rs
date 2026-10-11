@@ -98,8 +98,10 @@ Config: {}",
                                 }
                                 bot.send_message(chat_id, "✅ System will stay awake.").await?;
                             }
-                            Err(e) => bot.send_message(chat_id, format!("❌ {}", e)).await?,
-                        };
+                            Err(e) => {
+                                bot.send_message(chat_id, format!("❌ {}", e)).await?;
+                            }
+                        }
                     }
                     "/sleep" => {
                         let _ = power::keep_awake(false);
@@ -234,7 +236,6 @@ async fn background_monitor(cfg: Arc<Config>) {
         let effective_cutoff =
             battery_health::effective_cutoff(cfg.battery_cutoff, cfg.adaptive_battery_cutoff);
 
-        // Heat-aware priority gate
         let heat_blocks_low = cfg.heat_prefer_high_priority
             && matches!(thermal, ThermalState::Elevated | ThermalState::Critical);
 
@@ -258,7 +259,6 @@ async fn background_monitor(cfg: Arc<Config>) {
             }
         };
 
-        // Bag mode: if only low priority and not on AC, be stricter
         if cfg.bag_mode && should_be_awake {
             if matches!(highest, Some(Priority::Low)) && !battery_health::assess().on_ac {
                 should_be_awake = false;
@@ -287,7 +287,6 @@ async fn background_monitor(cfg: Arc<Config>) {
             }
         }
 
-        // Battery safety + longevity
         if let Some(percent) = battery::get_battery_percent() {
             if percent <= effective_cutoff && power::is_awake() {
                 let _ = power::keep_awake(false);
@@ -310,7 +309,6 @@ async fn background_monitor(cfg: Arc<Config>) {
             }
         }
 
-        // Thermal critical → unload local models
         if matches!(thermal, ThermalState::Critical)
             && cfg.local_model_intelligence
             && local_models::ollama_running_process()

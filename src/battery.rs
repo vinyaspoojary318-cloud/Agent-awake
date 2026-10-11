@@ -8,9 +8,10 @@ pub fn get_battery_info() -> String {
 
         let mut status = SYSTEM_POWER_STATUS::default();
 
+        // windows-rs 0.58: GetSystemPowerStatus returns Result<()>
         let result = unsafe { GetSystemPowerStatus(&mut status) };
 
-        if result.as_bool() {
+        if result.is_ok() {
             let percent = status.BatteryLifePercent;
 
             // 255 means "unknown"
@@ -30,7 +31,6 @@ pub fn get_battery_info() -> String {
                 ""
             };
 
-            // Estimate remaining time if available
             let remaining = if status.BatteryLifeTime != u32::MAX && status.BatteryLifeTime > 0 {
                 let mins = status.BatteryLifeTime / 60;
                 format!(" • ~{}m remaining", mins)
@@ -63,7 +63,7 @@ pub fn get_battery_percent() -> Option<u8> {
         let mut status = SYSTEM_POWER_STATUS::default();
         let result = unsafe { GetSystemPowerStatus(&mut status) };
 
-        if result.as_bool() {
+        if result.is_ok() {
             let percent = status.BatteryLifePercent;
             if percent <= 100 {
                 return Some(percent);

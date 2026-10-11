@@ -1,4 +1,4 @@
-use sysinfo::{System, ProcessesToUpdate};
+use sysinfo::System;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -47,7 +47,7 @@ fn agent_definitions() -> Vec<(&'static str, Priority)> {
         ("cursor", Priority::High),
         ("windsurf", Priority::High),
         ("aide", Priority::High),
-        ("zed", Priority::Normal), // editor; may host agents
+        ("zed", Priority::Normal),
 
         // Normal — CLIs & local inference
         ("ollama", Priority::Normal),
@@ -86,16 +86,17 @@ fn agent_definitions() -> Vec<(&'static str, Priority)> {
 
 pub fn detect_running_agents() -> Vec<DetectedAgent> {
     let mut sys = System::new();
-    sys.refresh_processes(ProcessesToUpdate::All);
+    // sysinfo 0.30: refresh_processes takes no args
+    sys.refresh_processes();
 
     let definitions = agent_definitions();
     let mut found: HashMap<String, DetectedAgent> = HashMap::new();
 
     for (pid, process) in sys.processes() {
-        let name = process.name().to_string_lossy().to_lowercase();
-        let display_name = process.name().to_string_lossy().to_string();
+        // sysinfo 0.30: name() returns &str
+        let name = process.name().to_lowercase();
+        let display_name = process.name().to_string();
 
-        // Skip obvious non-agents
         if name.contains("agent-awake") {
             continue;
         }
