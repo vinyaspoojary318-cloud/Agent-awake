@@ -5,40 +5,48 @@ Remote control via Telegram bot.
 
 Built with **Rust** for performance, safety and low resource usage.
 
-## Features (Planned / In Progress)
+## Features
 
-- Keep Windows awake while AI agents are working (Claude Code, Codex, Cursor, Ollama, etc.)
-- Works with laptop lid closed
-- Telegram bot for remote control
-- Battery monitoring + automatic cutoff
-- Heat awareness
-- Auto-restore power settings when agents finish
-- Lightweight system tray (future)
+- ✅ Keep Windows awake while AI agents are working
+- ✅ Works with laptop lid closed (screen turns off, system keeps running)
+- ✅ Telegram bot for remote control
+- ✅ Real battery percentage reading
+- ✅ Automatic keep-awake when agents are detected
+- ✅ Low battery safety cutoff (15%)
+- ✅ Lightweight
 
-## Commands (Telegram)
+### Supported / Detected Agents
+Claude Code, Codex, Cursor, Ollama, LM Studio, Aider, Continue, Open WebUI, ComfyUI, vLLM, llama.cpp, Hermes, Goose, Cline, and more.
+
+## Telegram Commands
 
 | Command     | Description                              |
 |-------------|------------------------------------------|
 | `/status`   | Show battery, awake status, running agents |
 | `/awake`    | Force keep system awake                  |
 | `/sleep`    | Allow normal sleep again                 |
-| `/battery`  | Detailed battery information             |
+| `/battery`  | Battery information                      |
 | `/help`     | Show available commands                  |
 
 ## Quick Start
 
 ### 1. Create Telegram Bot
-1. Open Telegram and talk to [@BotFather](https://t.me/BotFather)
-2. Create a new bot with `/newbot`
+1. Open Telegram → talk to [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow instructions
 3. Copy the token
 
-### 2. Setup
+### 2. Setup the project
 
 ```bash
 git clone https://github.com/vinyaspoojary318-cloud/Agent-awake.git
 cd Agent-awake
 cp .env.example .env
-# Edit .env and put your TELOXIDE_TOKEN
+```
+
+Edit `.env` and paste your token:
+
+```
+TELOXIDE_TOKEN=your_bot_token_here
 ```
 
 ### 3. Run
@@ -47,24 +55,35 @@ cp .env.example .env
 cargo run
 ```
 
-### 4. Build Release
+### 4. Build optimized release
 
 ```bash
 cargo build --release
 ```
 
-The binary will be at `target/release/agent-awake.exe`
+Binary location: `target/release/agent-awake.exe`
+
+## How it works
+
+- Uses Windows `SetThreadExecutionState` to prevent system sleep
+- Display is allowed to turn off (saves battery)
+- Background monitor checks every 20 seconds for running agents
+- Automatically enables keep-awake when agents are detected
+- Disables keep-awake if battery drops to 15% or below
 
 ## Roadmap
 
 - [x] Project structure
-- [ ] Windows keep-awake (PowerSetRequest / SetThreadExecutionState)
-- [ ] Telegram bot core
-- [ ] Battery monitoring
-- [ ] Agent process detection
-- [ ] Lid-close friendly power profile
+- [x] Windows keep-awake
+- [x] Telegram bot core
+- [x] Real battery reading
+- [x] Agent process detection
+- [x] Auto keep-awake when agents run
+- [ ] Change lid-close action to "Do nothing" (advanced)
 - [ ] System tray icon
-- [ ] Auto start with Windows
+- [ ] Better agent hooks (Claude Code / Codex official hooks)
+- [ ] Configurable battery cutoff
+- [ ] Auto-start with Windows
 
 ## License
 

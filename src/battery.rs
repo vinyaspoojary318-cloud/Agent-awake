@@ -1,20 +1,74 @@
-use sysinfo::System;
+use log::warn;
 
+/// Returns a human-readable battery status string.
 pub fn get_battery_info() -> String {
-    // Note: sysinfo battery support is limited on some systems.
-    // We will improve this later with windows-specific APIs.
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 
-    let mut sys = System::new();
-    sys.refresh_all();
+        let mut status = SYSTEM_POWER_STATUS::default();
 
-    // For now return basic system info + placeholder for battery
-    // Full battery percentage will be added next using Windows API.
+        let result = unsafe { GetSystemPowerStatus(&mut status) };
 
-    format!(
-        "Battery: (detailed reading coming soon)\n\
-CPU Usage: {:.1}%\n\
-Memory: {:.1} GB used",
-        sys.global_cpu_info().cpu_usage(),
-        sys.used_memory() as f64 / 1024.0 / 1024.0 / 1024.0
-    )
+        if result.as_bool() {
+            let percent = status.BatteryLifePercent;
+
+            // 255 means "unknown"
+            if percent == 255 {
+                return "Battery: Unknown".to_string();
+            }
+
+            let ac_line = match status.ACLineStatus {
+                0 => "On Battery",
+                1 => "Plugged In",
+                _ => "Unknown Power Source",
+            };
+
+            let charging = if status.BatteryFlag & 8 != 0 {
+                " (Charging)"
+            } else {
+                ""
+            };
+
+            // Estimate remaining time if available
+            let remaining = if status.BatteryLifeTime != u32::MAX && status.BatteryLifeTime > 0 {
+                let mins = status.BatteryLifeTime / 60;
+                format!(" • ~{}m remaining", mins)
+            } else {
+                String::new()
+            };
+
+            return format!(
+                "Battery: {}% {}{}{}",
+                percent, ac_line, charging, remaining
+            );
+        } else {
+            warn!("GetSystemPowerStatus failed");
+            return "Battery: Unable to read".to_string();
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        "Battery: Only supported on Windows".to_string()
+    }
+}
+
+/// Returns battery percentage (0-100) or None if unknown.
+pub fn get_battery_percent() -> Option<u8> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+
+        let mut status = SYSTEM_POWER_STATUS::default();
+        let result = unsafe { GetSystemPowerStatus(&mut status) };
+
+        if result.as_bool() {
+            let percent = status.BatteryLifePercent;
+            if percent <= 100 {
+                return Some(percent);
+            }
+        }
+    }
+    None
 }

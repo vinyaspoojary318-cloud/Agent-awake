@@ -5,34 +5,34 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static IS_AWAKE: AtomicBool = AtomicBool::new(false);
 
 /// Keep the system awake or restore normal behavior.
-/// Currently uses SetThreadExecutionState (simple & reliable).
+/// Uses SetThreadExecutionState which is simple and reliable on Windows.
 pub fn keep_awake(enable: bool) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::System::Threading::{
-            SetThreadExecutionState, ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED,
+            SetThreadExecutionState, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
         };
 
         if enable {
-            // Keep system awake (display can still turn off)
+            // Keep system awake (display is allowed to turn off to save power)
             let flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED;
             let result = unsafe { SetThreadExecutionState(flags) };
-            
+
             if result.0 == 0 {
                 return Err(anyhow!("SetThreadExecutionState failed"));
             }
 
             IS_AWAKE.store(true, Ordering::SeqCst);
-            info!("Keep-awake enabled");
+            info!("Keep-awake ENABLED");
         } else {
-            // Clear the request
+            // Clear the request → normal sleep behavior returns
             let result = unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
             if result.0 == 0 {
                 return Err(anyhow!("Failed to clear keep-awake"));
             }
 
             IS_AWAKE.store(false, Ordering::SeqCst);
-            info!("Keep-awake disabled");
+            info!("Keep-awake DISABLED");
         }
     }
 
