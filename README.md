@@ -13,6 +13,7 @@ Keep Windows AI coding agents running after you shut the laptop — with priorit
 
 **Repo:** [github.com/vinyaspoojary318-cloud/Agent-awake](https://github.com/vinyaspoojary318-cloud/Agent-awake)  
 **CI builds:** [Actions → agent-awake-windows artifact](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions)  
+**Setup (Codex · Antigravity · Ollama · Claude):** [Supported agents & setup](https://github.com/vinyaspoojary318-cloud/Agent-awake#supported-agents--setup)  
 **Telegram:** set `TELOXIDE_TOKEN` from [@BotFather](https://t.me/BotFather)
 
 </div>
@@ -50,6 +51,79 @@ Inspired by the Mac “lid closed, agents still working” wave — built native
 | **Audit trail** | Disk log + in-memory ring; `/audit` and tray “Log Status” |
 | **Config** | `%APPDATA%\agent-awake\config.toml` + env overrides |
 | **CI** | GitHub Actions `windows-latest` → uploads `agent-awake.exe` |
+
+---
+
+## Supported agents & setup
+
+> **No API keys. No OAuth. No “link account” step.**  
+> Start Agent-awake, run your agent as usual. It watches process names (and optional hook files).
+
+### Codex (OpenAI)
+
+1. Install and run [Codex CLI](https://github.com/openai/codex) the normal way.  
+2. Start **Agent-awake** (tray or `agent-awake.exe`).  
+3. When a process name contains `codex`, it is treated as **High** priority → machine can stay awake with lid closed.  
+4. Optional: install hook markers (Telegram `/hooks` or auto on start) so “session active” is clearer even if the process name is odd.
+
+**Check:** Telegram `/status` or tray tooltip should list Codex while it is running.
+
+### Antigravity
+
+1. Run Antigravity as you already do (desktop app / CLI).  
+2. Agent-awake matches process names containing `antigravity` or `agy` → **High** priority.  
+3. No extra config. Close the lid when a long job is running; keep-awake + lid override apply while it is detected.
+
+**Check:** `/status` should show Antigravity under Agents.
+
+### Ollama
+
+Two layers:
+
+| Layer | What happens |
+|-------|----------------|
+| **Detection** | Process name contains `ollama` → **Normal** priority (can keep machine awake) |
+| **Local model intelligence** | On low battery or critical heat, Agent-awake can call Ollama’s HTTP API to unload models (`keep_alive: 0`) |
+
+**Setup:**
+
+1. Run [Ollama](https://ollama.com/) on the same PC (default `http://127.0.0.1:11434`).  
+2. In `%APPDATA%\agent-awake\config.toml`:
+
+```toml
+local_model_intelligence = true
+ollama_url = "http://127.0.0.1:11434"
+```
+
+3. If Ollama listens elsewhere, change `ollama_url` or set env `AGENT_AWAKE_OLLAMA_URL`.
+
+No token required. Unload is best-effort (ignored if Ollama is not running).
+
+### Claude Code
+
+1. Run Claude Code as usual.  
+2. Process name containing `claude` → **High** priority.  
+3. Optional hooks: Agent-awake can install marker files so “active session” is detected more reliably (same idea as Codex).
+
+### Cursor / Windsurf / Aider / Copilot / others
+
+Zero-config process matching. Common fragments:
+
+| Priority | Matched names (examples) |
+|----------|---------------------------|
+| **High** | `claude`, `codex`, `antigravity`, `agy`, `cursor`, `windsurf`, `aide` |
+| **Normal** | `ollama`, `lmstudio`, `aider`, `opencode`, `copilot`, `gemini`, `localai`, `jan`, `vllm`, … |
+| **Low** | `gpt`, `comfyui`, `open-webui`, lightweight UIs |
+
+If your tool’s process name is missing, open an issue with the exact name from Task Manager → we can add it.
+
+### Quick verify checklist
+
+1. Start Agent-awake.  
+2. Start Codex / Antigravity / Ollama / Claude.  
+3. `/status` (Telegram) or tray → agents listed.  
+4. Close lid (with `override_lid_close = true`) → work continues.  
+5. When agents exit (or battery hits cutoff) → sleep policy restored.
 
 ---
 
@@ -211,20 +285,6 @@ Environment overrides (optional):
 
 ---
 
-## Detected agents (zero-config)
-
-Process name fragments (case-insensitive). Highest matching priority wins.
-
-| Priority | Examples |
-|----------|----------|
-| **High** | `claude`, `codex`, `antigravity`, `agy`, `cursor`, `windsurf`, `aide` |
-| **Normal** | `ollama`, `lmstudio`, `aider`, `opencode`, `copilot`, `gemini`, `localai`, `jan`, `vllm`, `llama-server`, … |
-| **Low** | `gpt`, `comfyui`, `open-webui`, `sillytavern`, lightweight UIs |
-
-Hooks (Claude Code / Codex marker files) can force “session active” even if process names are ambiguous.
-
----
-
 ## Safety model
 
 Agent-awake is designed so “agents can finish” does **not** mean “drain to 0% in a backpack”:
@@ -316,6 +376,6 @@ PRs and issues welcome.
 
 **Agent-awake** · Close the lid · Keep the agents · Save the battery  
 
-[Repository](https://github.com/vinyaspoojary318-cloud/Agent-awake) · [CI / Downloads](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions) · [Issues](https://github.com/vinyaspoojary318-cloud/Agent-awake/issues)
+[Repository](https://github.com/vinyaspoojary318-cloud/Agent-awake) · [Setup guide](https://github.com/vinyaspoojary318-cloud/Agent-awake#supported-agents--setup) · [CI / Downloads](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions) · [Issues](https://github.com/vinyaspoojary318-cloud/Agent-awake/issues)
 
 </div>
