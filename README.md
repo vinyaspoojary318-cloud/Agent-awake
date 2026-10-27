@@ -16,7 +16,7 @@ Keep Windows AI coding agents running after you shut the laptop — with priorit
 **Repo:** [github.com/vinyaspoojary318-cloud/Agent-awake](https://github.com/vinyaspoojary318-cloud/Agent-awake)  
 **CI builds:** [Actions → agent-awake-windows artifact](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions)  
 **Setup (Codex · Antigravity · Ollama · Claude):** [Supported agents & setup](https://github.com/vinyaspoojary318-cloud/Agent-awake#supported-agents--setup)  
-**Telegram:** set `TELOXIDE_TOKEN` from [@BotFather](https://t.me/BotFather)
+**Telegram setup:** [Connect your own bot](https://github.com/vinyaspoojary318-cloud/Agent-awake#telegram-setup-optional)
 
 </div>
 
@@ -49,7 +49,7 @@ Inspired by the Mac “lid closed, agents still working” wave — built native
 | **Battery longevity** | Configurable cutoff + **adaptive** raise when drain is rapid |
 | **Thermal gate** | CPU-load heat proxy; prefer high-priority agents when hot; can unload Ollama |
 | **Local model intelligence** | Talks to Ollama HTTP API (`keep_alive: 0`) to unload models under stress |
-| **Telegram bot** | Full remote control from your phone: status, awake/sleep, bag, audit, thermal |
+| **Telegram bot** | Optional: **your** bot for remote status, awake/sleep, bag, audit, stuck alerts |
 | **Audit trail** | Disk log + in-memory ring; `/audit` and tray “Log Status” |
 | **Config** | `%APPDATA%\agent-awake\config.toml` + env overrides |
 | **CI** | GitHub Actions `windows-latest` → uploads `agent-awake.exe` |
@@ -58,7 +58,7 @@ Inspired by the Mac “lid closed, agents still working” wave — built native
 
 ## Supported agents & setup
 
-> **No API keys. No OAuth. No “link account” step.**  
+> **No API keys. No OAuth. No “link account” step for agents.**  
 > Start Agent-awake, run your agent as usual. It watches process names (and optional hook files).
 
 ### Codex (OpenAI)
@@ -66,7 +66,7 @@ Inspired by the Mac “lid closed, agents still working” wave — built native
 1. Install and run [Codex CLI](https://github.com/openai/codex) the normal way.  
 2. Start **Agent-awake** (tray or `agent-awake.exe`).  
 3. When a process name contains `codex`, it is treated as **High** priority → machine can stay awake with lid closed.  
-4. Optional: install hook markers (Telegram `/hooks` or auto on start) so “session active” is clearer even if the process name is odd.
+4. Optional: install hook markers so “session active” is clearer even if the process name is odd.
 
 **Check:** Telegram `/status` or tray tooltip should list Codex while it is running.
 
@@ -158,8 +158,8 @@ If your tool’s process name is missing, open an issue with the exact name from
 ### 1. Prerequisites
 
 - Windows 10 / 11  
-- [Rust](https://rustup.rs/) (stable)  
-- Optional: [Telegram bot token](https://t.me/BotFather) for remote control  
+- [Rust](https://rustup.rs/) (stable) if building from source  
+- Optional: your own [Telegram bot token](https://t.me/BotFather) for remote control  
 
 ### 2. Clone & configure
 
@@ -167,7 +167,7 @@ If your tool’s process name is missing, open an issue with the exact name from
 git clone https://github.com/vinyaspoojary318-cloud/Agent-awake.git
 cd Agent-awake
 copy .env.example .env
-# Edit .env → set TELOXIDE_TOKEN=123456:ABC-DEF...
+# Optional: edit .env → set TELOXIDE_TOKEN=...
 ```
 
 ### 3. Run (dev)
@@ -196,6 +196,65 @@ First run creates:
 
 ---
 
+## Telegram setup (optional)
+
+There is **no shared public bot**. Each person creates **their own** bot and token. Tray + keep-awake work **without** Telegram.
+
+### Step-by-step
+
+1. Open Telegram and chat with **[@BotFather](https://t.me/BotFather)**.  
+2. Send `/newbot`.  
+3. Choose a **display name** (e.g. `My Agent Awake`).  
+4. Choose a **username** ending in `bot` (e.g. `my_agent_awake_bot`).  
+5. BotFather replies with a **token** like `123456789:AAH...`. **Copy it. Do not share it.**  
+6. Put the token on your PC (either method):
+
+**Option A — `.env` (dev / from source)**
+
+```powershell
+copy .env.example .env
+# Edit .env:
+TELOXIDE_TOKEN=123456789:AAH_your_token_here
+```
+
+**Option B — environment variable (also works with the `.exe`)**
+
+```powershell
+setx TELOXIDE_TOKEN "123456789:AAH_your_token_here"
+```
+
+Then **open a new** terminal (or sign out/in) so the variable is visible, and start `agent-awake.exe`.
+
+7. Start Agent-awake.  
+8. In Telegram, open **your** bot → **Start** or send `/start`.  
+9. Try `/status` — you should see awake/lid/bag/battery/agents.
+
+### Commands
+
+| Command | Action |
+|---------|--------|
+| `/start` · `/help` | Help + config summary |
+| `/status` | Awake, lid, bag, thermal, battery, agents, cutoff |
+| `/awake` | Force keep-awake (+ lid override / bag if configured) |
+| `/sleep` | Restore normal sleep + lid policy |
+| `/battery` | Battery health summary |
+| `/lid` | Current lid-close policy |
+| `/config` | Full config dump + paths |
+| `/audit` | Recent keep-awake decisions |
+| `/thermal` | CPU usage + heat proxy state |
+| `/bag` | Bag mode status |
+
+### Stuck-agent alerts
+
+If Telegram is connected and an agent process looks **idle for too long** (possible Submit / Approve wait), Agent-awake can message your bot so you know to open the lid or remote in. Alerts go to the last chat that talked to the bot (e.g. after `/start`).
+
+### Security notes
+
+- Anyone who has your **token** controls that bot — keep `.env` private; don’t commit it.  
+- This is remote **status/control of Agent-awake**, not a login to Claude/Codex/Ollama accounts.
+
+---
+
 ## System tray
 
 | Icon color | Meaning |
@@ -213,25 +272,6 @@ First run creates:
 - Quit  
 
 Tooltip shows awake state, bag mode, and a short CPU/thermal hint when available.
-
----
-
-## Telegram commands
-
-| Command | Action |
-|---------|--------|
-| `/start` · `/help` | Help + config summary |
-| `/status` | Awake, lid, bag, thermal, battery, agents, cutoff |
-| `/awake` | Force keep-awake (+ lid override / bag if configured) |
-| `/sleep` | Restore normal sleep + lid policy |
-| `/battery` | Battery health summary |
-| `/lid` | Current lid-close policy |
-| `/config` | Full config dump + paths |
-| `/audit` | Recent keep-awake decisions |
-| `/thermal` | CPU usage + heat proxy state |
-| `/bag` | Bag mode status |
-
-Create a bot with [@BotFather](https://t.me/BotFather), put the token in `.env` as `TELOXIDE_TOKEN`, start Agent-awake, then message the bot.
 
 ---
 
@@ -280,7 +320,7 @@ Environment overrides (optional):
 
 | Variable | Maps to |
 |----------|---------|
-| `TELOXIDE_TOKEN` | Telegram bot token (required for bot) |
+| `TELOXIDE_TOKEN` | Telegram bot token (optional; enables bot) |
 | `AGENT_AWAKE_BATTERY_CUTOFF` | `battery_cutoff` |
 | `AGENT_AWAKE_BAG_MODE` | `bag_mode` |
 | `AGENT_AWAKE_OLLAMA_URL` | `ollama_url` |
@@ -296,6 +336,8 @@ Agent-awake is designed so “agents can finish” does **not** mean “drain to
 3. **Thermal** — Critical heat can unload local models and drop low-priority awake.  
 4. **Restore on exit** — lid policy and keep-awake flags cleared on Ctrl+C / tray Quit.  
 5. **Audit** — every auto decision can be logged for later review.
+
+> Closing the lid on a desk or while plugged in is different from sealing a loaded laptop in a bag. Prefer airflow; use bag mode + cutoff when off AC.
 
 ---
 
@@ -353,7 +395,7 @@ Open: [Actions](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions) �
 | Adaptive battery cutoff | ✅ | rare | ❌ |
 | Thermal gate | ✅ (CPU proxy) | some | ❌ |
 | Local model unload | ✅ Ollama | rare | ❌ |
-| Telegram remote | ✅ | rare | ❌ |
+| Telegram remote | ✅ (your bot) | rare | ❌ |
 | System tray | ✅ | menu bar | often |
 | Audit log | ✅ | rare | ❌ |
 
@@ -361,6 +403,7 @@ Open: [Actions](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions) �
 
 ## Roadmap ideas
 
+- [ ] Startup restore if a previous run left lid on “Do nothing”  
 - [ ] Real WMI battery wear (design capacity vs full charge)  
 - [ ] Optional bag-mode network / firewall profile  
 - [ ] Richer MCP / stdio agent hooks  
@@ -381,6 +424,6 @@ PRs and issues welcome.
 
 **Agent-awake** · Close the lid · Keep the agents · Save the battery  
 
-[Repository](https://github.com/vinyaspoojary318-cloud/Agent-awake) · [Setup guide](https://github.com/vinyaspoojary318-cloud/Agent-awake#supported-agents--setup) · [CI / Downloads](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions) · [Issues](https://github.com/vinyaspoojary318-cloud/Agent-awake/issues)
+[Repository](https://github.com/vinyaspoojary318-cloud/Agent-awake) · [Telegram setup](https://github.com/vinyaspoojary318-cloud/Agent-awake#telegram-setup-optional) · [Agents setup](https://github.com/vinyaspoojary318-cloud/Agent-awake#supported-agents--setup) · [CI / Downloads](https://github.com/vinyaspoojary318-cloud/Agent-awake/actions) · [Issues](https://github.com/vinyaspoojary318-cloud/Agent-awake/issues)
 
 </div>
